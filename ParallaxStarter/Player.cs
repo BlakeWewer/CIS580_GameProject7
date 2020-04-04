@@ -10,12 +10,29 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace ParallaxStarter
 {
-    public class Player
+    public class Player : ISprite
     {
         /// <summary>
-        /// A spritesheet containing a helicopter image
+        /// A spritesheet containing the movement images
         /// </summary>
-        Texture2D spritesheet;
+        public Texture2D movesheet;
+
+        /// <summary>
+        /// A spritesheet containing the idle_fire images
+        /// </summary>
+        Texture2D idle_fire_sheet;
+
+        /// <summary>
+        /// A spritesheet containing the slash images
+        /// </summary>
+        Texture2D slashsheet;
+
+        /// <summary>
+        /// A spritesheet containing the death images
+        /// </summary>
+        Texture2D deathsheet;
+
+        public List<Texture2D> spriteList = new List<Texture2D>();
 
         /// <summary>
         /// The portion of the spritesheet that is the helicopter
@@ -24,24 +41,83 @@ namespace ParallaxStarter
         {
             X = 0,
             Y = 0,
-            Width = 131,
-            Height = 54
+            Width = 66,
+            Height = 84
         };
 
-        /// <summary>
-        /// The origin of the helicopter sprite
-        /// </summary>
-        Vector2 origin = new Vector2(66, 1);
+        enum MovingDirection
+        {
+            Right = 0,
+            Left = 1,
+            Up = 2,
+            Down = 3,
+            Idle = 4,
+        }
+
+        enum LivingState
+        {
+            Alive = 0,
+            Dead = 1,
+        }
+
+        enum FightingState
+        {
+            Idle = 0,
+            Shoot = 1,
+            Slash = 2,
+        }
+
+        MovingDirection moveDir;
+        MovingDirection prev_moveDir;
+        LivingState liveState;
+        FightingState fightState;
+
+        TimeSpan timer;
+        int frame;
+        public BoundingRectangle Bounds;
 
         /// <summary>
-        /// The angle the helicopter should tilt
+        /// How quickly the animation should advance frames (1/8 second as milliseconds)
         /// </summary>
-        float angle = 0;
+        const int ANIMATION_FRAME_RATE = 124;
+
+        /// <summary>
+        /// How quickly the player should move
+        /// </summary>
+        const float PLAYER_SPEED = 100;
+
+        /// <summary>
+        /// The width of the animation frames
+        /// </summary>
+        const int MOVING_FRAME_WIDTH = 75;
+
+        /// <summary>
+        /// The width of the animation frames
+        /// </summary>
+        const int IDLE_FIRE_FRAME_WIDTH = 77;
+
+        /// <summary>
+        /// The height of the animation frames
+        /// </summary>
+        const int FRAME_HEIGHT = 92;
+
+        const int MOVING_FRAME_WIDTH_GAP = 1;
+        const int IDLE_FIRE_FRAME_WIDTH_GAP = 0;
+
+        /// <summary>
+        /// The origin of the move sprite
+        /// </summary>
+        Vector2 move_origin = new Vector2(33, 84);
 
         /// <summary>
         /// The player's position in the world
         /// </summary>
         public Vector2 Position { get; set; }
+
+        /// <summary>
+        /// The angle the helicopter should tilt
+        /// </summary>
+        float angle = 0;
 
         /// <summary>
         /// How fast the player moves
@@ -51,11 +127,27 @@ namespace ParallaxStarter
         /// <summary>
         /// Constructs a player
         /// </summary>
-        /// <param name="spritesheet">The player's spritesheet</param>
-        public Player(Texture2D spritesheet)
+        /// <param name="movesheet">The player's movesheet</param>
+        public Player(Texture2D movesheet, Texture2D deathsheet, Texture2D idle_fire_sheet, Texture2D slashsheet)
         {
-            this.spritesheet = spritesheet;
-            this.Position = new Vector2(200, 200);
+            this.movesheet = movesheet;
+            this.deathsheet = deathsheet;
+            this.idle_fire_sheet = idle_fire_sheet;
+            this.slashsheet = slashsheet;
+            this.Position = new Vector2(200, 700);
+
+            spriteList.Add(movesheet);
+            spriteList.Add(deathsheet);
+            spriteList.Add(idle_fire_sheet);
+            spriteList.Add(slashsheet);
+
+            moveDir = MovingDirection.Idle;
+            prev_moveDir = MovingDirection.Idle;
+            liveState = LivingState.Alive;
+            fightState = FightingState.Idle;
+
+            timer = new TimeSpan(0);
+            Bounds = new BoundingRectangle(Position.X, Position.Y, 66, 84);
         }
 
         /// <summary>
@@ -76,39 +168,116 @@ namespace ParallaxStarter
             direction.Y = -gamePad.ThumbSticks.Left.Y;
 
             // Override with keyboard input
+            bool idle = true;
             var keyboard = Keyboard.GetState();
+            var speedVar = 1;
+            if (keyboard.IsKeyDown(Keys.Space)) speedVar = 20;
+
+            
             if(keyboard.IsKeyDown(Keys.Left) || keyboard.IsKeyDown(Keys.A))
             {
-                direction.X -= 1;
+                prev_moveDir = moveDir;
+                idle = false;
+                moveDir = MovingDirection.Left;
+                direction.X -= 1 * speedVar;
             }
             if (keyboard.IsKeyDown(Keys.Right) || keyboard.IsKeyDown(Keys.D)) 
             {
-                direction.X += 1;
+                prev_moveDir = moveDir;
+                idle = false;
+                moveDir = MovingDirection.Right;
+                direction.X += 1 * speedVar;
             }
             if(keyboard.IsKeyDown(Keys.Up) || keyboard.IsKeyDown(Keys.W))
             {
+                idle = false;
+                moveDir = MovingDirection.Up;
                 direction.Y -= 1;
             }
             if(keyboard.IsKeyDown(Keys.Down) || keyboard.IsKeyDown(Keys.S))
             {
+                idle = false;
+                moveDir = MovingDirection.Down;
                 direction.Y += 1;
             }
+            if(idle)
+            {
+                moveDir = MovingDirection.Idle;
+            }
 
-            // Caclulate the tilt of the helicopter
-            angle = 0.5f * direction.X;
-
-            // Move the helicopter
+            // Move the player
             Position += (float)gameTime.ElapsedGameTime.TotalSeconds * Speed * direction;
+            
+            // Check boundaries
+            if(Position.Y < 675)
+            {
+                var delta = 675 - Position.Y;
+                Position += new Vector2(0, (float)(delta));
+            }
+            if(Position.Y > 972)
+            {
+                var delta = 972 - Position.Y;
+                Position += new Vector2(0, (float)(delta));
+            }
+            if(Position.X < 200)
+            {
+                var delta = 200 - Position.X;
+                Position += new Vector2((float)(delta), 0);
+            }
+
+            // Update the player animation timer when the player is moving
+            if (moveDir != MovingDirection.Idle) timer += gameTime.ElapsedGameTime;
+
+            // Determine the frame should increase.  Using a while 
+            // loop will accomodate the possiblity the animation should 
+            // advance more than one frame.
+            while (timer.TotalMilliseconds > ANIMATION_FRAME_RATE)
+            {
+                // increase by one frame
+                frame++;
+                // reduce the timer by one frame duration
+                timer -= new TimeSpan(0, 0, 0, 0, ANIMATION_FRAME_RATE);
+            }
+
+            // Keep the frame within Bounds (there are four frames)
+            frame %= 6;
+
+            Bounds.X = Position.X;
+            Bounds.Y = Position.Y;
         }
 
         /// <summary>
         /// Draws the player sprite
         /// </summary>
         /// <param name="spriteBatch"></param>
-        public void Draw(SpriteBatch spriteBatch)
+        public void Draw(SpriteBatch spriteBatch, GameTime gameTime)
         {
-            // Render the helicopter, rotating about the rotors
-            spriteBatch.Draw(spritesheet, Position, sourceRect, Color.White, angle, origin, 1f, SpriteEffects.None, 0.7f);
+            var source = new Rectangle(
+                frame * (MOVING_FRAME_WIDTH + MOVING_FRAME_WIDTH_GAP), // X value 
+                0, // Y value
+                MOVING_FRAME_WIDTH, // Width 
+                FRAME_HEIGHT // Height
+                );
+            SpriteEffects spriteEffect = SpriteEffects.None;
+            if (moveDir == MovingDirection.Idle)
+            {
+                source = new Rectangle(
+                0, // X value 
+                0, // Y value
+                IDLE_FIRE_FRAME_WIDTH, // Width 
+                FRAME_HEIGHT // Height
+                );
+            }
+            if(prev_moveDir == MovingDirection.Left)
+            {
+                spriteEffect = SpriteEffects.FlipHorizontally;
+            }
+            // Render the player
+            if(moveDir != MovingDirection.Idle)
+                spriteBatch.Draw(movesheet, Position, source, Color.White, angle, move_origin, 1f, spriteEffect, 0.7f);
+            else
+                spriteBatch.Draw(idle_fire_sheet, Position, source, Color.White, angle, move_origin, 1f, spriteEffect, 0.7f);
+
         }
 
     }

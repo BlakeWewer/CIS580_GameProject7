@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using System.Collections.Generic;
 
 namespace ParallaxStarter
 {
@@ -29,6 +30,9 @@ namespace ParallaxStarter
         protected override void Initialize()
         {
             // TODO: Add your initialization logic here
+            graphics.PreferredBackBufferWidth = 1296;
+            graphics.PreferredBackBufferHeight = 972;
+            graphics.ApplyChanges();
 
             base.Initialize();
         }
@@ -43,8 +47,69 @@ namespace ParallaxStarter
             spriteBatch = new SpriteBatch(GraphicsDevice);
 
             // TODO: use this.Content to load your game content here
-            var spritesheet = Content.Load<Texture2D>("helicopter");
-            player = new Player(spritesheet);
+            var movesheet = Content.Load<Texture2D>("movesheet");
+            var idle_fire_sheet = Content.Load<Texture2D>("idle_fire");
+            var deathsheet = Content.Load<Texture2D>("deathsheet");
+            var slashsheet = Content.Load<Texture2D>("slash");
+            player = new Player(movesheet, deathsheet, idle_fire_sheet, slashsheet);
+
+            var backgroundTexture = Content.Load<Texture2D>("background");
+            var backgroundSprite = new StaticSprite(backgroundTexture);
+            var backgroundLayer = new ParallaxLayer(this);
+            backgroundLayer.Sprites.Add(backgroundSprite);
+            backgroundLayer.DrawOrder = 0;
+            Components.Add(backgroundLayer);
+
+            var playerLayer = new ParallaxLayer(this);
+            playerLayer.Sprites.Add(player);
+            playerLayer.DrawOrder = 2;
+            Components.Add(playerLayer);
+
+            var midgroundTexture = Content.Load<Texture2D>("road");
+
+            var midgroundSprites = new List<StaticSprite>();
+            for (int i = 0; i < 10; i++)
+            {
+                var position = new Vector2(i * 1296, 663);
+                var sprite = new StaticSprite(midgroundTexture, position);
+                midgroundSprites.Add(sprite);
+            }
+
+            var midgroundLayer = new ParallaxLayer(this);
+            midgroundLayer.Sprites.AddRange(midgroundSprites);
+            midgroundLayer.DrawOrder = 1;
+            //var midgroundScrollController = midgroundLayer.ScrollController as AutoScrollController;
+            //midgroundScrollController.Speed = 40f;
+            Components.Add(midgroundLayer);
+
+            var foregroundTexture = Content.Load<Texture2D>("small_carsheet");
+
+            var foregroundSprites = new List<StaticSprite>();
+            for (int i = 0; i < 10; i++)
+            {
+                var position = new Vector2(i * 1016, 700);
+                var sprite = new StaticSprite(foregroundTexture, position);
+                foregroundSprites.Add(sprite);
+            }
+
+            var foregroundLayer = new ParallaxLayer(this);
+            foreach (var sprite in foregroundSprites)
+            {
+                foregroundLayer.Sprites.Add(sprite);
+            }
+
+            foregroundLayer.DrawOrder = 4;
+            //var foregroundScrollController = foregroundLayer.ScrollController as AutoScrollController;
+            //foregroundScrollController.Speed = 80f;
+            Components.Add(foregroundLayer);
+
+            //var playerScrollController = playerLayer.ScrollController as AutoScrollController;
+            //playerScrollController.Speed = 80f;
+
+            backgroundLayer.ScrollController = new PlayerTrackingScrollController(player, 0.1f);
+            midgroundLayer.ScrollController = new PlayerTrackingScrollController(player, 0.4f);
+            playerLayer.ScrollController = new PlayerTrackingScrollController(player, 1.0f);
+            foregroundLayer.ScrollController = new PlayerTrackingScrollController(player, 1.0f);
         }
 
         /// <summary>
@@ -82,7 +147,7 @@ namespace ParallaxStarter
 
             // TODO: Add your drawing code here
             spriteBatch.Begin();
-            player.Draw(spriteBatch);
+            player.Draw(spriteBatch, gameTime);
             spriteBatch.End();
 
             base.Draw(gameTime);
