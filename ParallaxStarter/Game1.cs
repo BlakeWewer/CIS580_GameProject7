@@ -87,7 +87,7 @@ namespace ParallaxStarter
             var foregroundSprites = new List<StaticSprite>();
             for (int i = 0; i < 10; i++)
             {
-                var position = new Vector2(i * 1016, 700);
+                var position = new Vector2(i * 2500, 900);
                 var sprite = new StaticSprite(foregroundTexture, position);
                 foregroundSprites.Add(sprite);
             }
