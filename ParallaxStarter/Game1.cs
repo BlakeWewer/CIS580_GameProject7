@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using System;
 using System.Collections.Generic;
 
 namespace ParallaxStarter
@@ -12,6 +13,7 @@ namespace ParallaxStarter
     {
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
+        SpriteFont font;
 
         Player player;
 
@@ -51,7 +53,8 @@ namespace ParallaxStarter
             var idle_fire_sheet = Content.Load<Texture2D>("idle_fire");
             var deathsheet = Content.Load<Texture2D>("deathsheet");
             var slashsheet = Content.Load<Texture2D>("slash");
-            player = new Player(movesheet, deathsheet, idle_fire_sheet, slashsheet);
+            player = new Player(this, movesheet, deathsheet, idle_fire_sheet, slashsheet);
+            player.LoadContent();
 
             var backgroundTexture = Content.Load<Texture2D>("background");
             var backgroundSprite = new StaticSprite(backgroundTexture);
@@ -87,7 +90,7 @@ namespace ParallaxStarter
             var foregroundSprites = new List<StaticSprite>();
             for (int i = 0; i < 10; i++)
             {
-                var position = new Vector2(i * 2500, 900);
+                var position = new Vector2(i * 2500, 880);
                 var sprite = new StaticSprite(foregroundTexture, position);
                 foregroundSprites.Add(sprite);
             }
@@ -107,9 +110,11 @@ namespace ParallaxStarter
             //playerScrollController.Speed = 80f;
 
             backgroundLayer.ScrollController = new PlayerTrackingScrollController(player, 0.1f);
-            midgroundLayer.ScrollController = new PlayerTrackingScrollController(player, 0.4f);
+            midgroundLayer.ScrollController = new PlayerTrackingScrollController(player, .9f);
             playerLayer.ScrollController = new PlayerTrackingScrollController(player, 1.0f);
-            foregroundLayer.ScrollController = new PlayerTrackingScrollController(player, 1.0f);
+            foregroundLayer.ScrollController = new PlayerTrackingScrollController(player, 1.2f);
+
+            font = Content.Load<SpriteFont>("font_score");
         }
 
         /// <summary>
@@ -134,6 +139,50 @@ namespace ParallaxStarter
             // TODO: Add your update logic here
             player.Update(gameTime);
 
+            // Check for collisions
+
+            foreach(Enemy e in player.enemies)
+            {
+                bool collision = false;
+                foreach(Bullet b in player.bullets)
+                {
+                    if(e.Bounds.CollidesWith(b.Bounds))
+                    {
+                        player.enemies.Remove(e);
+                        player.bullets.Remove(b);
+                        player.score += 500;
+                        collision = true;
+                        break;
+                    }
+                    if (collision) break;
+                }
+                if(collision) break;
+
+                if(e.Bounds.CollidesWith(player.leftSlashBox) && player.leftSlashBoxActive)
+                {
+                    player.enemies.Remove(e);
+                    player.score += 1000;
+                    collision = true;
+                    break;
+                }
+                if (collision) break;
+
+                if (e.Bounds.CollidesWith(player.rightSlashBox) && player.rightSlashBoxActive)
+                {
+                    player.enemies.Remove(e);
+                    player.score += 1000;
+                    collision = true;
+                    break;
+                }
+                if (collision) break;
+
+                if(e.Bounds.CollidesWith(player.Bounds))
+                {
+                    player.gameOver = true;
+                    player.liveState = Player.LivingState.Dead;
+                }
+            }
+
             base.Update(gameTime);
         }
 
@@ -143,11 +192,13 @@ namespace ParallaxStarter
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
+            GraphicsDevice.Clear(Color.DarkGray);
 
             // TODO: Add your drawing code here
-            spriteBatch.Begin();
+            spriteBatch.Begin(SpriteSortMode.BackToFront);
+
             player.Draw(spriteBatch, gameTime);
+            
             spriteBatch.End();
 
             base.Draw(gameTime);

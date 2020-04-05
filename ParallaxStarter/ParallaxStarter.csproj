@@ -42,7 +42,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AutoScrollController.cs" />
+    <Compile Include="BoundingPoint.cs" />
     <Compile Include="BoundingRectangle.cs" />
+    <Compile Include="Bullet.cs" />
+    <Compile Include="Collisions.cs" />
+    <Compile Include="Enemy.cs" />
     <Compile Include="Game1.cs" />
     <Compile Include="IScrollController.cs" />
     <Compile Include="ISprite.cs" />

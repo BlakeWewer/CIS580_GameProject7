@@ -54,10 +54,17 @@ namespace ParallaxStarter
             Idle = 4,
         }
 
-        enum LivingState
+        enum FacingDirection
+        {
+            Right = 0,
+            Left = 1,
+        }
+
+        public enum LivingState
         {
             Alive = 0,
             Dead = 1,
+            Win = 2,
         }
 
         enum FightingState
@@ -67,24 +74,58 @@ namespace ParallaxStarter
             Slash = 2,
         }
 
+        Game1 game;
+
         MovingDirection moveDir;
         MovingDirection prev_moveDir;
-        LivingState liveState;
+        FacingDirection faceDir;
+        public LivingState liveState;
         FightingState fightState;
 
         TimeSpan timer;
         int frame;
         public BoundingRectangle Bounds;
+
+
         TimeSpan fireTimer;
         int fireFrame;
         double fireDelay = 1000;
         double fireRate = 372;
         TimeSpan fireAnimationTimer;
+        Texture2D bulletTexture;
+        public List<Bullet> bullets = new List<Bullet>();
+
         TimeSpan slashTimer;
         int slashFrame;
         double slashDelay = 1000;
         double slashRate = 496;
         TimeSpan slashAnimationTimer;
+        public BoundingRectangle leftSlashBox;
+        public BoundingRectangle rightSlashBox;
+        public bool leftSlashBoxActive, rightSlashBoxActive, gameOver;
+
+        Texture2D pixel;
+        public uint score = 0;
+        uint maxPos = 200;
+
+        SpriteFont score_font, game_over_font;
+
+
+        public List<Enemy> enemies = new List<Enemy>();
+
+        enum EnemySpawnRate
+        {
+            Low = 0,
+            Medium = 1,
+            High = 2,
+            Extreme = 3,
+        }
+
+        float nextSpawn = 400;
+
+        EnemySpawnRate enemySpawnRate = EnemySpawnRate.Low;
+
+        Random random = new Random();
 
         /// <summary>
         /// How quickly the animation should advance frames (1/8 second as milliseconds)
@@ -144,8 +185,9 @@ namespace ParallaxStarter
         /// Constructs a player
         /// </summary>
         /// <param name="movesheet">The player's movesheet</param>
-        public Player(Texture2D movesheet, Texture2D deathsheet, Texture2D idle_fire_sheet, Texture2D slashsheet)
+        public Player(Game1 game, Texture2D movesheet, Texture2D deathsheet, Texture2D idle_fire_sheet, Texture2D slashsheet)
         {
+            this.game = game;
             this.movesheet = movesheet;
             this.deathsheet = deathsheet;
             this.idle_fire_sheet = idle_fire_sheet;
@@ -159,6 +201,7 @@ namespace ParallaxStarter
 
             moveDir = MovingDirection.Idle;
             prev_moveDir = MovingDirection.Idle;
+            faceDir = FacingDirection.Right;
             liveState = LivingState.Alive;
             fightState = FightingState.Idle;
 
@@ -166,8 +209,22 @@ namespace ParallaxStarter
             fireAnimationTimer = new TimeSpan(0);
             slashAnimationTimer = new TimeSpan(0);
             Bounds = new BoundingRectangle(Position.X, Position.Y, 66, 84);
+            leftSlashBox = new BoundingRectangle(Position.X - 50, Position.Y - 85, 50, 60);
+            rightSlashBox = new BoundingRectangle(Position.X + 10, Position.Y - 85, 50, 60);
+            leftSlashBoxActive = false;
+            rightSlashBoxActive = false;
             fireTimer = new TimeSpan(0);
             slashTimer = new TimeSpan(0);
+            gameOver = false;
+        }
+
+
+        public void LoadContent()
+        {
+            bulletTexture = game.Content.Load<Texture2D>("bullet");
+            pixel = game.Content.Load<Texture2D>("pixel");
+            score_font = game.Content.Load<SpriteFont>("font_score");
+            game_over_font = game.Content.Load<SpriteFont>("Game Over");
         }
 
         /// <summary>
@@ -176,8 +233,19 @@ namespace ParallaxStarter
         /// <param name="gameTime">The GameTime object</param>
         public void Update(GameTime gameTime)
         {
+            if(Position.X > 11800)
+            {
+                liveState = LivingState.Win;
+            }
             if(liveState == LivingState.Alive)
             {
+                int curPos = (int)Position.X - 200;
+                if(curPos > maxPos)
+                {
+                    score += (uint)curPos - maxPos;
+                    maxPos = (uint)curPos;
+                }
+
                 Vector2 direction = Vector2.Zero;
 
                 // Use GamePad for input
@@ -193,7 +261,7 @@ namespace ParallaxStarter
                 bool idle = true;
                 var keyboard = Keyboard.GetState();
                 var speedVar = 1;
-                if (keyboard.IsKeyDown(Keys.Space)) speedVar = 20;
+                //if (keyboard.IsKeyDown(Keys.Space)) speedVar = 20;
 
                 if(keyboard.IsKeyDown(Keys.O) || keyboard.IsKeyDown(Keys.Z))
                 {
@@ -201,11 +269,34 @@ namespace ParallaxStarter
                     {
                         fightState = FightingState.Shoot;
                         fireTimer = new TimeSpan(0);
+                        Vector2 bulletVelocity = Vector2.Zero;
+                        if(faceDir == FacingDirection.Right)
+                        {
+                            bulletVelocity = new Vector2(3, 0);
+                        }
+                        if(faceDir == FacingDirection.Left)
+                        {
+                            bulletVelocity = new Vector2(-3, 0);
+                        }
 
                         // Create Bullet
+                        Bullet bullet = new Bullet(game, bulletTexture, new Vector2(Position.X, Position.Y - 65), bulletVelocity);
+                        bullets.Add(bullet);
                     }
                 }
                 fireTimer += gameTime.ElapsedGameTime;
+                foreach(Bullet b in bullets)
+                {
+                    b.Update(gameTime);
+                }
+                foreach(Bullet b in bullets)
+                {
+                    if (b.active_time.TotalMilliseconds > 5000)
+                    {
+                        bullets.Remove(b);
+                    }
+                    break;
+                }
 
                 if (keyboard.IsKeyDown(Keys.P) || keyboard.IsKeyDown(Keys.X))
                 {
@@ -215,6 +306,8 @@ namespace ParallaxStarter
                         slashTimer = new TimeSpan(0);
 
                         // Create Knife HitBox
+                        if (faceDir == FacingDirection.Left) leftSlashBoxActive = true;
+                        if (faceDir == FacingDirection.Right) rightSlashBoxActive = true;
                     }
                 }
                 slashTimer += gameTime.ElapsedGameTime;
@@ -224,6 +317,8 @@ namespace ParallaxStarter
                     if (slashTimer.TotalMilliseconds > slashRate && fireTimer.TotalMilliseconds > fireRate)
                     {
                         fightState = FightingState.Idle;
+                        leftSlashBoxActive = false;
+                        rightSlashBoxActive = false;
                     }
                 }
 
@@ -234,6 +329,7 @@ namespace ParallaxStarter
                         prev_moveDir = moveDir;
                         idle = false;
                         moveDir = MovingDirection.Left;
+                        faceDir = FacingDirection.Left;
                         direction.X -= 1 * speedVar;
                     }
                     if (keyboard.IsKeyDown(Keys.Right) || keyboard.IsKeyDown(Keys.D))
@@ -241,6 +337,7 @@ namespace ParallaxStarter
                         prev_moveDir = moveDir;
                         idle = false;
                         moveDir = MovingDirection.Right;
+                        faceDir = FacingDirection.Right;
                         direction.X += 1 * speedVar;
                     }
                     if (keyboard.IsKeyDown(Keys.Up) || keyboard.IsKeyDown(Keys.W))
@@ -335,10 +432,67 @@ namespace ParallaxStarter
                 fireFrame %= 3;
                 slashFrame %= 4;
 
+                leftSlashBox.X += Position.X - Bounds.X;
+                leftSlashBox.Y += Position.Y - Bounds.Y;
+                rightSlashBox.X += Position.X - Bounds.X;
+                rightSlashBox.Y += Position.Y - Bounds.Y;
                 Bounds.X = Position.X;
                 Bounds.Y = Position.Y;
+
+                // Spawn enemies
+                if (Position.X > nextSpawn)
+                {
+                    switch (enemySpawnRate)
+                    {
+                        case EnemySpawnRate.Low:
+                            for (int i = 0; i < 3; i++)
+                            {
+                                Vector2 position = new Vector2(Position.X + 1100, (float)(random.Next(600) + 580));
+                                Enemy temp = new Enemy(game, position);
+                                enemies.Add(temp);
+                            }
+                            break;
+                        case EnemySpawnRate.Medium:
+                            for (int i = 0; i < 5; i++)
+                            {
+                                Vector2 position = new Vector2(Position.X + 1100, (float)(random.Next(600) + 580));
+                                Enemy temp = new Enemy(game, position);
+                                enemies.Add(temp);
+                            }
+                            break;
+                        case EnemySpawnRate.High:
+                            for (int i = 0; i < 8; i++)
+                            {
+                                Vector2 position = new Vector2(Position.X + 1100, (float)(random.Next(600) + 580));
+                                Enemy temp = new Enemy(game, position);
+                                enemies.Add(temp);
+                            }
+                            break;
+                        case EnemySpawnRate.Extreme:
+                            for (int i = 0; i < 12; i++)
+                            {
+                                Vector2 position = new Vector2(Position.X + 1100, (float)(random.Next(600) + 580));
+                                Enemy temp = new Enemy(game, position);
+                                enemies.Add(temp);
+                            }
+                            break;
+                    }
+                    nextSpawn += 750;
+                    if (nextSpawn > 2000)
+                        enemySpawnRate = EnemySpawnRate.Medium;
+                    if (nextSpawn > 5000)
+                        enemySpawnRate = EnemySpawnRate.High;
+                    if (nextSpawn > 8000)
+                        enemySpawnRate = EnemySpawnRate.Extreme;
+                }
+
+
+                foreach (Enemy enemy in enemies)
+                {
+                    enemy.Update(gameTime, Position);
+                }
             }
-            
+
         }
 
         /// <summary>
@@ -407,9 +561,36 @@ namespace ParallaxStarter
                 {
                     spriteBatch.Draw(slashsheet, Position, source, Color.White, angle, move_origin, 1f, spriteEffect, 0.7f);
                 }
-                
-            }
 
+                foreach(Bullet b in bullets)
+                {
+                    b.Draw(spriteBatch);
+                }
+
+                spriteBatch.DrawString(score_font, $"Score: {score}", new Vector2(Position.X - 190, 10), Color.Black);
+
+                //spriteBatch.DrawString(score_font, $"{enemies.Count}", new Vector2(Position.X, 10), Color.Black);
+                //spriteBatch.DrawString(score_font, $"{gameOver}", new Vector2(Position.X + 100, 10), Color.Black);
+
+                foreach (Enemy enemy in enemies)
+                {
+                    enemy.Draw(spriteBatch);
+                }
+            }
+            else if(liveState == LivingState.Dead)
+            {
+                Vector2 messageCentered = game_over_font.MeasureString("GAME OVER") / 2;
+                spriteBatch.DrawString(game_over_font, "GAME OVER", new Vector2(Position.X - 200 + 648 - messageCentered.X, 200), Color.Red);
+                messageCentered = game_over_font.MeasureString($"Score: {score}") / 2;
+                spriteBatch.DrawString(score_font, $"Score: {score}", new Vector2(Position.X + 648 - messageCentered.X, 300), Color.Black);
+            }
+            else if(liveState == LivingState.Win)
+            {
+                Vector2 messageCentered = game_over_font.MeasureString("YOU WIN!") / 2;
+                spriteBatch.DrawString(game_over_font, "YOU WIN!", new Vector2(Position.X - 200 + 648 - messageCentered.X, 200), Color.Black);
+                messageCentered = game_over_font.MeasureString($"Score: {score}") / 2;
+                spriteBatch.DrawString(score_font, $"Score: {score}", new Vector2(Position.X + 648 - messageCentered.X, 300), Color.Black);
+            }
         }
     }
 }
